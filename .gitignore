@@ -1,0 +1,25 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Environment variables
+.env
+
+# Docker volumes (data, not code)
+postgres_data/
+chroma_data/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Logs
+*.log
+
+# Alembic (if you add migrations later, keep versions but ignore local db state)
+*.db
+*.sqlite3
