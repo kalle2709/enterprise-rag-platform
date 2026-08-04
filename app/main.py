@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from app.routes import agents
 from app.db import Base, engine
 from app.models import document, conversation
 from app.routes import documents
@@ -12,6 +13,7 @@ app = FastAPI(
 )
 
 app.include_router(documents.router)
+app.include_router(agents.router)
 
 
 @app.get("/health")
