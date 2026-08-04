@@ -1,14 +1,20 @@
+import asyncio
 from typing import TypedDict
 from langgraph.graph import StateGraph, END
 from langchain_google_genai import ChatGoogleGenerativeAI
-from app.agents.document_search_agent import compiled_search_agent
-from app.agents.meeting_summary_agent import compiled_meeting_agent
-from app.agents.task_automation_agent import compiled_task_agent
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
 from app.config import settings
 
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash",
     google_api_key=settings.google_api_key
+)
+
+server_params = StdioServerParameters(
+    command="python",
+    args=["-m", "app.mcp_server"],
+    env={"PYTHONPATH": "."}
 )
 
 
@@ -36,37 +42,38 @@ Category:"""
     route = response.content.strip().lower()
     return {**state, "route": route}
 
+
+async def call_mcp_tool(tool_name: str, arguments: dict) -> str:
+    async with stdio_client(server_params) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            result = await session.call_tool(tool_name, arguments)
+            return result.content[0].text
+
+
 def dispatch_node(state: SupervisorState) -> SupervisorState:
     route = state["route"]
     session_id = state.get("session_id", "default")
 
     if "document_search" in route:
-        result = compiled_search_agent.invoke({
+        result = asyncio.run(call_mcp_tool("document_search", {
             "query": state["user_input"],
-            "session_id": session_id,
-            "retrieved_docs": [],
-            "answer": ""
-        })
-        return {**state, "result": result["answer"]}
-
+            "session_id": session_id
+        }))
     elif "meeting_summary" in route:
-        result = compiled_meeting_agent.invoke({
+        result = asyncio.run(call_mcp_tool("meeting_summary", {
             "transcript": state["user_input"],
-            "session_id": session_id,
-            "summary": ""
-        })
-        return {**state, "result": result["summary"]}
-
+            "session_id": session_id
+        }))
     elif "task_automation" in route:
-        result = compiled_task_agent.invoke({
+        result = asyncio.run(call_mcp_tool("task_automation", {
             "request": state["user_input"],
-            "session_id": session_id,
-            "tasks": ""
-        })
-        return {**state, "result": result["tasks"]}
-
+            "session_id": session_id
+        }))
     else:
-        return {**state, "result": "Could not determine which agent should handle this request."}
+        result = "Could not determine which agent should handle this request."
+
+    return {**state, "result": result}
 
 
 workflow = StateGraph(SupervisorState)
